@@ -1,0 +1,17 @@
+TODO:
+
+[ ] Move nickpassword to be paramter three and not five, shifting
+delicious parameters upwards
+[ ] Provide documentation and create gem on rubyforge
+[ ] Remove hardcodings:
+   [ ] Create a bot array, instead of the hardcoded 'Spinach'
+   [ ] Add a parameter for hour of the day to quote oscar
+[ ] Add a parameter --no_daily to disable daily oscar quoting
+[ ] Make oscar quoting respect --silent
+[ ] Make oscar quoting be a NOTICE and not a PRIVMSG?
+
+Wishlist:
+
+[ ] Create an array of session cookies to allow for private irb
+sessions
+[ ] Give irbie "needs" to allow for playful riposte with other bots
