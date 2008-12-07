@@ -1,4 +1,4 @@
-%w[open3 daemons socket singleton open-uri cgi pathname hpricot yaml net/https yaml].map{|s| require s}
+%w[open3 daemons socket singleton open-uri cgi pathname hpricot yaml net/https yaml timeout].map{|s| require s}
 
 =begin rdoc
 In-channel commands:
@@ -48,7 +48,7 @@ class Irbie
 
     # Initialise the next time a quote should be said
 #    self.next_oscar = Time.now + 120
-    self.next_oscar = Time.now.change(:hour => 5)
+    self.next_oscar = Time.now.change(:hour => 6)
     self.next_oscar = self.next_oscar.tomorrow if self.next_oscar < Time.now
 
     #Initialize a list of pre-oscar quote sayings
@@ -89,8 +89,8 @@ class Irbie
       when /^PING/
         write line.sub("PING", "PONG")[0..-3]
       when /^ERROR/, /KICK ##{config[:channel]} #{config[:nick]} /
-#           restart unless line =~ /PRIVMSG/
-      when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
+           restart unless line =~ /PRIVMSG/
+     when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
           log "* #{$1} #{$2}"
       when /:(.+?)!.* PRIVMSG #{config[:nick]} \:(.+)/
           say_privately($1, $2)
@@ -197,6 +197,7 @@ class Irbie
       :tags => ( nick + " " + email),
       :replace => 'yes' }
     begin
+      Timeout::timeout(15) do
       http = Net::HTTP.new('api.del.icio.us', 443)
       http.use_ssl = true
       response = http.start do |http|
@@ -205,6 +206,9 @@ class Irbie
         http.request(req)
       end.body
       puts "POST: #{response.inspect}" if config[:debug]
+      end
+      rescue Timeout::Error
+       puts "Timeout posting url #{url}"  if config[:debug]
     end
   end
 
