@@ -90,7 +90,7 @@ class Irbie
         write line.sub("PING", "PONG")[0..-3]
       when /^ERROR/, /KICK ##{config[:channel]} #{config[:nick]} /
            restart unless line =~ /PRIVMSG/
-     when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
+      when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
           log "* #{$1} #{$2}"
       when /:(.+?)!.* PRIVMSG #{config[:nick]} \:(.+)/
           say_privately($1, $2)
@@ -111,11 +111,14 @@ class Irbie
            when /(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/ then post($1,nick,email) if config[:delicious_pass]
          end
       end
+          if msg.match(/(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/)
+              post($1,nick,email) if config[:delicious_pass]
+          end
     end
 
       if self.next_oscar < Time.now
 #        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
-        quote_oscar("")
+#        quote_oscar("")
         self.next_oscar = self.next_oscar.tomorrow
       end
 
@@ -157,7 +160,7 @@ class Irbie
   # Say something privately
   def say_privately(nicko, msg)
     unless /VERSION/.match(msg)
-      s2 = "PRIVMSG #{nicko} : #{config[:nick]} is a social creature, please speak to me in channel"
+      s2 = "PRIVMSG #{nicko} : #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
       write s2
       log "WROTE: #{s2}"
       sleep 1
@@ -210,6 +213,8 @@ class Irbie
       rescue Timeout::Error
        puts "Timeout posting url #{url}"  if config[:debug]
     end
+      rescue Timeout::Error
+       puts "Timeout posting url #{url}"  if config[:debug]
   end
 
   def quote_oscar(st)
