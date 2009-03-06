@@ -13,6 +13,7 @@ Optional post-parameters:
 require 'rubygems'
 require 'daemons'
 require 'time'
+gem 'activesupport', '=2.0.2'
 require 'active_support'
 
 begin

@@ -1,4 +1,4 @@
-%w[open3 daemons socket singleton open-uri cgi pathname hpricot yaml net/https yaml timeout].map{|s| require s}
+%w[ruby-debug open3 daemons socket singleton open-uri cgi pathname hpricot yaml net/https yaml timeout elbot].map{|s| require s}
 
 =begin rdoc
 In-channel commands:
@@ -51,8 +51,6 @@ class Irbie
     self.next_oscar = Time.now.change(:hour => 6)
     self.next_oscar = self.next_oscar.tomorrow if self.next_oscar < Time.now
 
-    #Initialize a list of pre-oscar quote sayings
-    self.pre_oscar = [ "*yawn*. Need botcoffee. And an Oscar Wilde quote:", "*blink*. Herewith today's Oscar Wilde Quote:", "ohi. Need an Oscar Wilde Quote?:", "I am not a morning bot. But I can quote Oscar Wilde:", "*#{config[:nick]}* heads off to Starbots. But before he goes, he tosses out these words by Oscar Wilde:", "*#{config[:nick]}* got woken by the dulcet words of Oscar Wilde:", "Oscar Wilde la Vista baby:", "The daily search for botnirvana commences. First though, an Oscar Wilde quotation:" ]
   end
 
   # Connect and reconnect to the server
@@ -84,43 +82,47 @@ class Irbie
       #       poll if !config[:silent]
 
       case line.strip
-      when /does not appear to be registered on this network|will change your nick/
+      when /does not appear to be registered on this network|will change your nick|End of \/NAMES/
         identify
       when /^PING/
         write line.sub("PING", "PONG")[0..-3]
       when /^ERROR/, /KICK ##{config[:channel]} #{config[:nick]} /
-           restart unless line =~ /PRIVMSG/
+          restart unless line =~ /PRIVMSG/
       when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
           log "* #{$1} #{$2}"
       when /:(.+?)!.* PRIVMSG #{config[:nick]} \:(.+)/
           say_privately($1, $2)
       when /:(.+?)!(.+?) PRIVMSG ##{config[:channel]} \:(.+)/
-          nick, email, msg = $1, $2, $3
+        nick, email, msg = $1, $2, $3
         log "<#{nick}> #{msg}"
         if !config[:silent]
+          #TODO: Check if I'm being addressed by a bot - nick.is_bot?
+#GOT: ":irbaceous!irbaceous@atrum-566FF29E.groll.co.za JOIN :#chanirby\r\n"
+
+          write "WHO #{nick}"
           case msg
           when /^>>\s*(.+)/ then try $1
           when /^#{config[:nick]}:\s*(.+)/
-            to_try = $1
-            if /oscar/i.match(to_try)
-              quote_oscar(to_try.sub!(/oscar/i, ""))
+              direct_msg = $1
+            if /^oscar/i.match(direct_msg)
+              quote_oscar(direct_msg.sub!(/oscar/i, ""))
             else
-              try to_try unless /Spinach/.match(nick)
+              say speak_to_elbot(direct_msg, config[:channel])
             end
-           when /^reset_irb|^irb_reset/ then reset_irb
-           when /(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/ then post($1,nick,email) if config[:delicious_pass]
-         end
-      end
-          if msg.match(/(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/)
-              post($1,nick,email) if config[:delicious_pass]
+          when /^reset_irb|^irb_reset/ then reset_irb
+          when /(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/ then post($1,nick,email) if config[:delicious_pass]
           end
-    end
-
-      if self.next_oscar < Time.now
-#        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
-#        quote_oscar("")
-        self.next_oscar = self.next_oscar.tomorrow
+        end
+        if config[:delicious_pass]
+          post($1,nick,email) if msg.match(/(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/)
+        end
       end
+
+#       if self.next_oscar < Time.now
+# #        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
+# #        quote_oscar("")
+#         self.next_oscar = self.next_oscar.tomorrow
+#       end
 
     end
   end
@@ -147,6 +149,7 @@ class Irbie
   def try s
     reset_irb unless @session
     reset_irb if /^reset_irb|^irb_reset/.match(s)
+    return if s.match(/#{config[:nick]}/)
     try_eval(s).select{|e| e !~ /^\s+from .+\:\d+(\:|$)/}.each {|e| say e} rescue say "session error"
   end
 
@@ -160,10 +163,18 @@ class Irbie
   # Say something privately
   def say_privately(nicko, msg)
     unless /VERSION/.match(msg)
-      s2 = "PRIVMSG #{nicko} : #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
-      write s2
+      if  /^>>\s*(.+)/.match(msg)
+        s1 = " #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
+      else
+        s1 = speak_to_elbot(msg, nicko)
+      end
+
+      if s1 != ''
+      s2 = "PRIVMSG #{nicko} :#{s1}"
+      write  s2
       log "WROTE: #{s2}"
       sleep 1
+      end
     end
    end
 
@@ -188,7 +199,7 @@ class Irbie
     result[/^Your session has been closed/] ? (reset_irb and try_eval s) : result.split("\n").slice(0,20)
   end
 
-  # Post a url to the del.icio.us account.
+  # Post a url to a del.icio.us account.
   def post (url, nick, email)
     return if /Spinach/.match(nick)
     puts "POST: #{url}" if config[:debug]
@@ -201,20 +212,19 @@ class Irbie
       :replace => 'yes' }
     begin
       Timeout::timeout(15) do
-      http = Net::HTTP.new('api.del.icio.us', 443)
-      http.use_ssl = true
-      response = http.start do |http|
-        req = Net::HTTP::Get.new('/v1/posts/add?' + query.map{|k,v| "#{k}=#{CGI.escape(v)}"}.join('&'))
-        req.basic_auth config[:delicious_user], config[:delicious_pass]
-        http.request(req)
-      end.body
-      puts "POST: #{response.inspect}" if config[:debug]
+        http = Net::HTTP.new('api.del.icio.us', 443)
+        http.use_ssl = true
+        response = http.start do |http|
+          req = Net::HTTP::Get.new('/v1/posts/add?' + query.map{|k,v| "#{k}=#{CGI.escape(v)}"}.join('&'))
+          req.basic_auth config[:delicious_user], config[:delicious_pass]
+          http.request(req)
+        end.body
+        puts "POST: #{response.inspect}" if config[:debug]
       end
-      rescue Timeout::Error
-       puts "Timeout posting url #{url}"  if config[:debug]
     end
-      rescue Timeout::Error
-       puts "Timeout posting url #{url}"  if config[:debug]
+
+  rescue Timeout::Error
+    puts "Timeout posting url #{url}"  if config[:debug]
   end
 
   def quote_oscar(st)
@@ -226,5 +236,11 @@ class Irbie
       say "Sorry, no Oscar Wilde quote found for #{st}" if found.empty?
   end
 
-end
+  def speak_to_elbot(msg, name)
+    @elbots ||= Hash.new
+    @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
+    el = @elbots[name]
+    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub("<!-- Country: Australia  -->","")
+  end
 
+end
