@@ -9,11 +9,6 @@ In-channel commands:
 
 class Irbie
 
-  attr_reader :config
-  attr_accessor :oscar, :next_oscar, :pre_oscar
-
-  #   next_oscar oscar
-
   # Make a new Irbie. Will not connect to the server until you call connect().
   def initialize(opts = {})
 
@@ -44,12 +39,7 @@ class Irbie
     end
 
     # Initialise quote array
-    self.oscar =  YAML::load(File.open('oscar.yaml'))
-
-    # Initialise the next time a quote should be said
-#    self.next_oscar = Time.now + 120
-    self.next_oscar = Time.now.change(:hour => 6)
-    self.next_oscar = self.next_oscar.tomorrow if self.next_oscar < Time.now
+    @oscar = Oscar.new('oscar.yaml', 6)
 
   end
 
@@ -105,7 +95,7 @@ class Irbie
           when /^#{config[:nick]}:\s*(.+)/
               direct_msg = $1
             if /^oscar/i.match(direct_msg)
-              quote_oscar(direct_msg.sub!(/oscar/i, ""))
+              say @oscar.quote_oscar(direct_msg.sub!(/oscar/i, ""))
             else
               say speak_to_elbot(direct_msg, config[:channel])
             end
@@ -118,11 +108,11 @@ class Irbie
         end
       end
 
-#       if self.next_oscar < Time.now
-# #        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
-# #        quote_oscar("")
-#         self.next_oscar = self.next_oscar.tomorrow
-#       end
+      if @oscar.next_oscar < Time.now
+#        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
+        say @oscar.quote_oscar("")
+        @oscar.next_oscar = @oscar.next_oscar.tomorrow
+      end
 
     end
   end
@@ -227,15 +217,6 @@ class Irbie
     puts "Timeout posting url #{url}"  if config[:debug]
   end
 
-  def quote_oscar(st)
-      st.lstrip!
-      st = $1 if (/\/(.+?)\/(.*?)/).match(st)
-      re = Regexp.new(st, Regexp::IGNORECASE)
-      found = self.oscar.find_all{ |e| e =~ re  }
-      say ( '"' + found[rand(found.size)] + '" - Oscar Wilde')  if ! found.empty?
-      say "Sorry, no Oscar Wilde quote found for #{st}" if found.empty?
-  end
-
   def speak_to_elbot(msg, name)
     @elbots ||= Hash.new
     @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
@@ -243,4 +224,25 @@ class Irbie
     return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub("<!-- Country: Australia  -->","")
   end
 
+end
+
+class Oscar
+  attr_accessor :next_oscar
+
+  def initialize(filename, quotehour)
+    self.oscar =  YAML::load(File.open(filename))
+
+    # Initialise the next time a quote should be said
+    self.next_oscar = Time.now.change(:hour => quotehour)
+    self.next_oscar = self.next_oscar.tomorrow if self.next_oscar < Time.now
+  end
+
+  def quote_oscar(st)
+      st.lstrip!
+      st = $1 if (/\/(.+?)\/(.*?)/).match(st)
+      re = Regexp.new(st, Regexp::IGNORECASE)
+      found = self.oscar.find_all{ |e| e =~ re  }
+      return ( '"' + found[rand(found.size)] + '" - Oscar Wilde')  if ! found.empty?
+      return "Sorry, no Oscar Wilde quote found for #{st}" if found.empty?
+  end
 end
