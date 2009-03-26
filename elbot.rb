@@ -18,7 +18,7 @@ class Elbot
     form = @page.forms[0]
     form.fields.find{|f| f.name == 'ENTRY' }.value = msg.to_s
     @page = @agent.submit(form)
-    return $1 if @page.body.match(/<!-- Begin Response !-->\n(.+)/)
+    result = @page.body.match(/<!-- Begin Response !-->\n(.+)/)[1].gsub("<!-- Country: Australia  -->","")
   end
 
 end

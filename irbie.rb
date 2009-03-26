@@ -1,4 +1,4 @@
-%w[ruby-debug open3 daemons socket singleton open-uri cgi pathname hpricot yaml net/https yaml timeout elbot].map{|s| require s}
+%w[ruby-debug open3 daemons socket singleton open-uri cgi pathname hpricot net/https timeout elbot oscar].map{|s| require s}
 
 =begin rdoc
 In-channel commands:
@@ -8,6 +8,8 @@ In-channel commands:
 =end
 
 class Irbie
+
+  attr_reader :config
 
   # Make a new Irbie. Will not connect to the server until you call connect().
   def initialize(opts = {})
@@ -35,21 +37,17 @@ class Irbie
 
     # Nicely merge current options
     opts.each do |key, value|
-      config[key] = value if value
+      @config[key] = value if value
     end
 
     # Initialise quote array
-    @oscar = Oscar.new('oscar.yaml', 6)
-
+    @osc = Oscar.new  'oscar.yaml', 6
   end
 
   # Connect and reconnect to the server
   def restart
     log "Restarting"
     puts config.inspect if config[:debug]
-
-    @svns = (YAML.load_file config[:svns] rescue {})
-    @atoms  = (YAML.load_file config[:atoms] rescue {})
 
     @socket.close if @socket
     connect
@@ -65,57 +63,86 @@ class Irbie
     write "JOIN ##{config[:channel]}"
   end
 
-  # The event loop. Waits for socket traffic, and then responds to it. The server sends <tt>PING</tt> every 3 minutes, which means we don't need a separate thread to check for svn updates. All we do is wake on ping (or channel talking).
+  # The event loop. Waits for socket traffic, and then responds to it.
+  # The server sends <tt>PING</tt> every 3 minutes, All we do is wake on ping (or channel talking).
   def listen
     @socket.each do |line|
       puts "GOT: #{line.inspect}" if config[:debug]
       #       poll if !config[:silent]
 
       case line.strip
+
+        # Grab result of a WHO query on a nick
+      when /\s352\s#{config[:nick]}\s#.+?\s.+?\s.+?\s.+?\s(.+?)\s(.+?)\s:/
+          add_to_botlist($1, $2)
+
+        # Someone new joins the channel, find out if they're a human or bot
+      when /:(.+?)!.+?@.+?\sJOIN\s:##{config[:channel]}/
+          sleep 1
+        write "WHO #{$1}"
+
+        # Need to identify with the chanserver
       when /does not appear to be registered on this network|will change your nick|End of \/NAMES/
         identify
+
+        # Keep connection alive
       when /^PING/
         write line.sub("PING", "PONG")[0..-3]
+
+        # I've been kicked, etc
       when /^ERROR/, /KICK ##{config[:channel]} #{config[:nick]} /
           restart unless line =~ /PRIVMSG/
+
+        # Just log actions
       when /:(.+?)!.* PRIVMSG ##{config[:channel]} \:\001ACTION (.+)\001/
           log "* #{$1} #{$2}"
+
+        # Private communication
       when /:(.+?)!.* PRIVMSG #{config[:nick]} \:(.+)/
           say_privately($1, $2)
-      when /:(.+?)!(.+?) PRIVMSG ##{config[:channel]} \:(.+)/
-        nick, email, msg = $1, $2, $3
-        log "<#{nick}> #{msg}"
-        if !config[:silent]
-          #TODO: Check if I'm being addressed by a bot - nick.is_bot?
-#GOT: ":irbaceous!irbaceous@atrum-566FF29E.groll.co.za JOIN :#chanirby\r\n"
 
-          write "WHO #{nick}"
-          case msg
-          when /^>>\s*(.+)/ then try $1
-          when /^#{config[:nick]}:\s*(.+)/
-              direct_msg = $1
-            if /^oscar/i.match(direct_msg)
-              say @oscar.quote_oscar(direct_msg.sub!(/oscar/i, ""))
-            else
-              say speak_to_elbot(direct_msg, config[:channel])
+        # Public communication
+      when /:(.+?)!(.+?) PRIVMSG ##{config[:channel]} \:(.+)/
+          nick, email, msg = $1, $2, $3
+        log "<#{nick}> #{msg}"
+
+        if !config[:silent]
+
+          unless @botlist[nick] == :bot
+            case msg
+
+              # Line begins with >> - evaluate the ruby
+            when /^>>\s*(.+)/ then try $1
+
+              # Direct message - either it's someone asking for an Oscar quote or let Elbot handle it
+            when /^#{config[:nick]}:\s*(.+)/
+                direct_msg = $1
+              if /^oscar/i.match(direct_msg)
+                say @osc.quote_oscar(direct_msg.sub!(/oscar/i, ""))
+              else
+                say speak_to_elbot(direct_msg, config[:channel])
+              end
+
+              # Reset ruby eval cookie
+            when /^reset_irb|^irb_reset/ then reset_irb
+
+              # Post message to delicious
+            when /(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/ then post($1,nick,email) if config[:delicious_pass]
             end
-          when /^reset_irb|^irb_reset/ then reset_irb
-          when /(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/ then post($1,nick,email) if config[:delicious_pass]
           end
-        end
-        if config[:delicious_pass]
-          post($1,nick,email) if msg.match(/(https?:\/\/.*?|\swww\..+?|:www\..+?)(\s|\r|\n|$)/)
         end
       end
 
-      if @oscar.next_oscar < Time.now
-#        say ( self.pre_oscar[ rand(self.pre_oscar.size)] )
-        say @oscar.quote_oscar("")
-        @oscar.next_oscar = @oscar.next_oscar.tomorrow
+      # Is it time for an Oscar quote?
+      if @osc.next_oscar < Time.now
+        say @osc.quote_oscar("")
+        @osc.next_oscar = @osc.next_oscar.tomorrow
       end
 
     end
   end
+
+  ######
 
   # Send a raw string to the server.
   def write s
@@ -160,19 +187,19 @@ class Irbie
       end
 
       if s1 != ''
-      s2 = "PRIVMSG #{nicko} :#{s1}"
-      write  s2
-      log "WROTE: #{s2}"
-      sleep 1
+        s2 = "PRIVMSG #{nicko} :#{s1}"
+        write  s2
+        log "WROTE: #{s2}"
+        sleep 1
       end
     end
-   end
+  end
 
   #identify myself to the nickserv and join the channel (seems to apply to atrum and not freenode)
   def identify
-     write "NICKSERV :identify #{config[:nick_pwd]}"
-     write "MODE #{config[:nick]} +B"
-     write "JOIN ##{config[:channel]}"
+    write "NICKSERV :identify #{config[:nick_pwd]}"
+    write "MODE #{config[:nick]} +B"
+    write "JOIN ##{config[:channel]}"
   end
 
   # Get a new <tt>irb</tt> session.
@@ -185,13 +212,13 @@ class Irbie
   def try_eval s
     reset_irb and return [] if s.strip == "exit"
     result = open("http://tryruby.hobix.com/irb?cmd=#{CGI.escape(s)}",
-            {'Cookie' => "_session_id=#{@session}"}).read
+                  {'Cookie' => "_session_id=#{@session}"}).read
     result[/^Your session has been closed/] ? (reset_irb and try_eval s) : result.split("\n").slice(0,20)
   end
 
   # Post a url to a del.icio.us account.
   def post (url, nick, email)
-    return if /Spinach/.match(nick)
+    return if @botlist[nick] == :bot
     puts "POST: #{url}" if config[:debug]
     email = email.sub(/\@.*?\./, "^")
     email = "" if /IP$/.match(email)
@@ -221,28 +248,20 @@ class Irbie
     @elbots ||= Hash.new
     @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
     el = @elbots[name]
-    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub("<!-- Country: Australia  -->","")
+    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick])
+  end
+
+  def add_to_botlist(nick, flags)
+    if @botlist == nil
+      @botlist = Hash.new
+      write "WHO"
+    end
+
+    flags =~ /B/ ? state = :bot :  state = :human
+    @botlist[nick] = state
+    puts nick.to_s + " " + state.to_s
+    puts "***"
   end
 
 end
 
-class Oscar
-  attr_accessor :next_oscar
-
-  def initialize(filename, quotehour)
-    self.oscar =  YAML::load(File.open(filename))
-
-    # Initialise the next time a quote should be said
-    self.next_oscar = Time.now.change(:hour => quotehour)
-    self.next_oscar = self.next_oscar.tomorrow if self.next_oscar < Time.now
-  end
-
-  def quote_oscar(st)
-      st.lstrip!
-      st = $1 if (/\/(.+?)\/(.*?)/).match(st)
-      re = Regexp.new(st, Regexp::IGNORECASE)
-      found = self.oscar.find_all{ |e| e =~ re  }
-      return ( '"' + found[rand(found.size)] + '" - Oscar Wilde')  if ! found.empty?
-      return "Sorry, no Oscar Wilde quote found for #{st}" if found.empty?
-  end
-end
