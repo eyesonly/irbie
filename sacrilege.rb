@@ -11,10 +11,10 @@ class Sacrilege
     @form = @page.forms[0]
   end
 
-  def say(msg)
+  def eval(msg)
     @form.fields.find{|f| f.name == 'statement' }.value = msg
     @page = @agent.submit(@form)
-    return  @page.body
+    @page.body.split("\n").slice(0,25)
   end
 
 end

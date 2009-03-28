@@ -1,4 +1,4 @@
-%w[ruby-debug open3 daemons socket singleton open-uri cgi pathname hpricot net/https timeout elbot oscar].map{|s| require s}
+%w[ruby-debug open3 daemons socket singleton open-uri cgi pathname hpricot net/https timeout elbot oscar sacrilege].map{|s| require s}
 
 =begin rdoc
 In-channel commands:
@@ -111,6 +111,9 @@ class Irbie
           unless @botlist[nick] == :bot
             case msg
 
+              # Line begins with /// - evaluate with python
+            when /^>>>(\s?)(.+)/ then say(python($2, config[:channel]))
+
               # Line begins with >> - evaluate the ruby
             when /^>>\s*(.+)/ then try $1
 
@@ -180,7 +183,9 @@ class Irbie
   # Say something privately
   def say_privately(nicko, msg)
     unless /VERSION/.match(msg)
-      if  /^>>\s*(.+)/.match(msg)
+      if /^>>>(\s?)(.+)/.match(msg)
+        s1 = python(msg.sub(/^>>>\s?/,""), nicko)
+      elsif  /^>>\s*(.+)/.match(msg)
         s1 = " #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
       else
         s1 = speak_to_elbot(msg, nicko)
@@ -248,7 +253,14 @@ class Irbie
     @elbots ||= Hash.new
     @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
     el = @elbots[name]
-    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick])
+    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub(/<.*?>/, "")
+  end
+
+  def python(msg, name)
+    @pysessions ||= Hash.new
+    @pysessions[name] = @pysessions[name] ||  Sacrilege.new
+    sacrebleu = @pysessions[name]
+    return sacrebleu.eval(msg).to_s
   end
 
   def add_to_botlist(nick, flags)
