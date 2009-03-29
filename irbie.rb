@@ -19,8 +19,6 @@ class Irbie
     nick = opts[:nick] || config[:nick] || "irbie-dev"
 
     @config ||= {
-      :svns => "#{path}/#{nick}.svns",
-      :atoms => "#{path}/#{nick}.atoms",
       :pidfile => "#{path}/#{nick}.pid",
       :nick => nick,
       :channel => 'irbie-dev',
@@ -32,7 +30,9 @@ class Irbie
       :logfile => "#{path}/#{nick}.log",
       :time_format => '%Y/%m/%d %H:%M:%S',
       :debug => false,
-      :nick_pwd => false
+      :nick_pwd => false,
+      :oscar_time => 6,
+      :oscar_disabled => true
     }
 
     # Nicely merge current options
@@ -41,7 +41,7 @@ class Irbie
     end
 
     # Initialise quote array
-    @osc = Oscar.new  'oscar.yaml', 6
+    @osc = Oscar.new  'oscar.yaml', config[:oscar_time]
   end
 
   # Connect and reconnect to the server
@@ -137,7 +137,7 @@ class Irbie
       end
 
       # Is it time for an Oscar quote?
-      if @osc.next_oscar < Time.now
+      if @osc.next_oscar < Time.now && config[:oscar_disabled] == false
         say @osc.quote_oscar("")
         @osc.next_oscar = @osc.next_oscar.tomorrow
       end
@@ -259,8 +259,8 @@ class Irbie
   def python(msg, name)
     @pysessions ||= Hash.new
     @pysessions[name] = @pysessions[name] ||  Sacrilege.new
-    sacrebleu = @pysessions[name]
-    return sacrebleu.eval(msg).to_s
+    sacr = @pysessions[name]
+    return sacr.eval(msg).to_s
   end
 
   def add_to_botlist(nick, flags)

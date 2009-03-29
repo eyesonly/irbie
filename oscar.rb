@@ -1,5 +1,3 @@
-require 'yaml'
-
 class Oscar
 
   attr_accessor :next_oscar

@@ -1,18 +1,25 @@
 #!/usr/bin/env ruby
 
 =begin rdoc
-Run <tt>irbie [nick] [channel] [server] [optional del.icio.us name] [optional del.icio.us password]</tt>.
+Run <tt>irbie config.ini</tt>.
 
-Optional post-parameters:
+Parameters that can be set in config.ini file shipped for parameter options available:
+<tt>--nick</tt>:: Nickname bot assumes in channel.
+<tt>--nick_pwd</tt>:: If nickname is registered, this is the password to IDENTIFY with.
+<tt>--channel</tt>:: IRC channel to join.
+<tt>--server</tt>:: IRC server to connect to.
 <tt>--daemon</tt>:: Daemonize.
 <tt>--silent</tt>:: Never speak, even for errors.
-<tt>--log</tt>:: Log channel chatter to a file.
 <tt>--debug</tt>:: Debug mode.
+<tt>--log</tt>:: Log channel chatter to a file.
+<tt>--logfile</tt>:: Log filename.
+<tt>--delicious_user</tt>:: Delicious for logging of URLs to delicious.
+<tt>--delicious_pass</tt>:: Delicious password for logging of URLs to delicious.
+<tt>--oscar_time</tt>:: Time of day to drop an Oscar Wilde quote in channel.
+<tt>--oscar_disabled</tt>:: Set to true if you don't want Oscar Wilde being quoted daily.
 =end
 
-require 'rubygems'
-require 'daemons'
-require 'time'
+%w[rubygems daemons time yaml].map{|s| require s}
 gem 'activesupport', '=2.0.2'
 require 'active_support'
 
@@ -22,34 +29,18 @@ rescue LoadError
   require 'irbie'
 end
 
-def option?(opt)
-  ARGV.include?("--#{opt}")
-end
-
-def param(arg)
-  arg unless arg =~ /^--/
-end
-
 class Time
   include ActiveSupport::CoreExtensions::Time::Calculations
 end
 
-@irbie = Irbie.new(
-  :nick => param(ARGV[0]),
-  :channel => param(ARGV[1]),
-  :server => param(ARGV[2]),
-  :delicious_user => param(ARGV[3]),
-  :delicious_pass => param(ARGV[4]),
-  :silent => option?("silent"),
-  :debug => option?("debug"),
-  :log => option?("log"),
-  :nick_pwd => param(ARGV[5])
-)
+config =  YAML::load(File.open(ARGV[0]))
+
+@irbie = Irbie.new(config)
 
 pid = open(@irbie.config[:pidfile]).gets.chomp rescue nil
 
 if !pid or `ps #{pid}`.split("\n").size < 2
-  Daemons.daemonize if option? "daemon"
+  Daemons.daemonize if config['daemon'] == true
   open(@irbie.config[:pidfile], 'w') {|f| f.puts $$}
   @irbie.restart
 end
