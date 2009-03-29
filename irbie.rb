@@ -111,8 +111,8 @@ class Irbie
           unless @botlist[nick] == :bot
             case msg
 
-              # Line begins with /// - evaluate with python
-            when /^>>>(\s?)(.+)/ then say(python($2, config[:channel]))
+              # Line begins with >>> - evaluate with python
+            when /^>>>(\s?)(.+)/ then python($2, config[:channel]).each{|e| say e }
 
               # Line begins with >> - evaluate the ruby
             when /^>>\s*(.+)/ then try $1
