@@ -15,23 +15,19 @@ class Sacrilege
   def eval(msg)
     @code_stack.push(msg) if ( msg =~ /:$/ || !(@code_stack.empty?))
     if msg == nil  && !(@code_stack.empty?)
-      stack = @code_stack.join("\n") + "\n"
-      @form.fields.find{|f| f.name == 'statement' }.value = stack
+      set(@code_stack.join("\n") + "\n")
       @code_stack.clear
+      page = @agent.submit(@form)
     elsif @code_stack.empty?
-      @form.fields.find{|f| f.name == 'statement' }.value = msg
+      set(msg)
+      page = @agent.submit(@form)
     end
-    page = @agent.submit(@form)
-    @form.fields.find{|f| f.name == 'statement' }.value = ""
-    print page.body
-    return  page.body.split("\n").slice(0, 15)
+    return page.body.split("\n").slice(0, 15) if page
+    []
   end
 
-  def colon_end(line)
-    @level_stack ||= Array.new
-    @level = ( line =~ /\S/ )
-    @level_stack.push(level)
+  def set(val)
+    @form.fields.find{|f| f.name == 'statement' }.value = val
   end
-
 
 end

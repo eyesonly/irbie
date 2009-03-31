@@ -177,14 +177,14 @@ class Irbie
   def say s
     write "PRIVMSG ##{config[:channel]} :#{s[0..450]}"
     log "<#{config[:nick]}> #{s}"
-#     sleep 1
+    sleep 0.5
   end
 
   # Handle private event
   def private_handler(nicko, msg)
-    unless /VERSION/.match(msg)
-      if /^>>>(\s?|\r)(.+)/.match(msg)
-        s1 = python(msg.sub(/^>>>\s?/,""), nicko)
+    unless /VERSION/.match(msg) || @botlist[nicko] == :bot
+      if /^>>>(.+)|^>>>$()/.match(msg)
+        s1 = python($1, nicko)
       elsif  /^>>\s*(.+)/.match(msg)
         s1 = " #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
       else
@@ -202,7 +202,7 @@ class Irbie
         s2 = "PRIVMSG #{nick} :#{s1}"
         write  s2
         log "WROTE: #{s2}"
-#         sleep 1
+        sleep 0.5
   end
 
   #identify myself to the nickserv and join the channel (seems to apply to atrum and not freenode)
@@ -221,7 +221,7 @@ class Irbie
   # Inner loop of the try method.
   def try_eval s
     reset_irb and return [] if s.strip == "exit"
-    result = open("http://tryruby.hobix.com/irb?cmd=#{CGI.escape(s)}",
+    result = open("http://tryruby.hobix.com/irb?cmd=#{ CGI.escape(s)}",
                   {'Cookie' => "_session_id=#{@session}"}).read
     result[/^Your session has been closed/] ? (reset_irb and try_eval s) : result.split("\n").slice(0,20)
   end
