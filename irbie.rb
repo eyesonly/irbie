@@ -109,10 +109,10 @@ class Irbie
         if !config[:silent]
 
           unless @botlist[nick] == :bot
-            case msg
 
+            case msg
               # Line begins with >>> - evaluate with python
-            when /^>>>(\s?)(.+)/ then python($2, config[:channel]).each{|e| say e }
+            when /^>>>(.+)|^>>>$()/ then python($1, config[:channel]).each{|e| say e }
 
               # Line begins with >> - evaluate the ruby
             when /^>>\s*(.+)/ then try $1
@@ -183,7 +183,7 @@ class Irbie
   # Say something privately
   def say_privately(nicko, msg)
     unless /VERSION/.match(msg)
-      if /^>>>(\s?)(.+)/.match(msg)
+      if /^>>>(\s?|\r)(.+)/.match(msg)
         s1 = python(msg.sub(/^>>>\s?/,""), nicko)
       elsif  /^>>\s*(.+)/.match(msg)
         s1 = " #{config[:nick]} will only eval ruby code in channel, rather visit http://tryruby.hobix.com/"
