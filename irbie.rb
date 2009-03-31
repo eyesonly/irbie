@@ -220,10 +220,12 @@ class Irbie
 
   # Inner loop of the try method.
   def try_eval s
+
     reset_irb and return [] if s.strip == "exit"
     result = open("http://tryruby.hobix.com/irb?cmd=#{ CGI.escape(s)}",
-                  {'Cookie' => "_session_id=#{@session}"}).read
+                  {'Cookie' => "_session_id=#{@session}"}).read rescue "My ruby server is down"
     result[/^Your session has been closed/] ? (reset_irb and try_eval s) : result.split("\n").slice(0,20)
+
   end
 
   # Post a url to a del.icio.us account.
