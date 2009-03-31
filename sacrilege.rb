@@ -13,21 +13,18 @@ class Sacrilege
   end
 
   def eval(msg)
-    msg = "" if msg == nil
     @code_stack.push(msg) if ( msg =~ /:$/ || !(@code_stack.empty?))
-    if msg == "" && !(@code_stack.empty?)
+    if msg == nil  && !(@code_stack.empty?)
       stack = @code_stack.join("\n") + "\n"
-      debugger
       @form.fields.find{|f| f.name == 'statement' }.value = stack
       @code_stack.clear
     elsif @code_stack.empty?
       @form.fields.find{|f| f.name == 'statement' }.value = msg
     end
     page = @agent.submit(@form)
-#     @form.fields.find{|f| f.name == 'statement' }.value = ""
+    @form.fields.find{|f| f.name == 'statement' }.value = ""
     print page.body
-    a  =  page.body.split("\n")
-     return a
+    return  page.body.split("\n").slice(0, 15)
   end
 
   def colon_end(line)

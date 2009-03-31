@@ -99,7 +99,7 @@ class Irbie
 
         # Private communication
       when /:(.+?)!.* PRIVMSG #{config[:nick]} \:(.+)/
-          say_privately($1, $2)
+          private_handler($1, $2)
 
         # Public communication
       when /:(.+?)!(.+?) PRIVMSG ##{config[:channel]} \:(.+)/
@@ -114,7 +114,7 @@ class Irbie
               # Line begins with >>> - evaluate with python
             when /^>>>(.+)|^>>>$()/ then python($1, config[:channel]).each{|e| say e }
 
-              # Line begins with >> - evaluate the ruby
+              # Line begins with >> - evaluate ruby
             when /^>>\s*(.+)/ then try $1
 
               # Direct message - either it's someone asking for an Oscar quote or let Elbot handle it
@@ -177,11 +177,11 @@ class Irbie
   def say s
     write "PRIVMSG ##{config[:channel]} :#{s[0..450]}"
     log "<#{config[:nick]}> #{s}"
-    sleep 1
+#     sleep 1
   end
 
-  # Say something privately
-  def say_privately(nicko, msg)
+  # Handle private event
+  def private_handler(nicko, msg)
     unless /VERSION/.match(msg)
       if /^>>>(\s?|\r)(.+)/.match(msg)
         s1 = python(msg.sub(/^>>>\s?/,""), nicko)
@@ -190,14 +190,19 @@ class Irbie
       else
         s1 = speak_to_elbot(msg, nicko)
       end
-
-      if s1 != ''
-        s2 = "PRIVMSG #{nicko} :#{s1}"
-        write  s2
-        log "WROTE: #{s2}"
-        sleep 1
+      if s1 != '' && s1.class.to_s == "String"
+        say_privately(s1, nicko)
+      elsif s1 != '' && s1.class.to_s == "Array"
+        s1.each{ |s| say_privately(s, nicko) }
       end
     end
+  end
+
+  def say_privately(s1, nick)
+        s2 = "PRIVMSG #{nick} :#{s1}"
+        write  s2
+        log "WROTE: #{s2}"
+#         sleep 1
   end
 
   #identify myself to the nickserv and join the channel (seems to apply to atrum and not freenode)
@@ -260,7 +265,7 @@ class Irbie
     @pysessions ||= Hash.new
     @pysessions[name] = @pysessions[name] ||  Sacrilege.new
     sacr = @pysessions[name]
-    return sacr.eval(msg).to_s
+    return sacr.eval(msg)
   end
 
   def add_to_botlist(nick, flags)
