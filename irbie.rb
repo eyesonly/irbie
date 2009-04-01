@@ -137,7 +137,7 @@ class Irbie
       end
 
       # Is it time for an Oscar quote?
-      if @osc.next_oscar < Time.now && config[:oscar_disabled] == false
+      if @osc.next_oscar < Time.now && !config[:oscar_disabled]
         say @osc.quote_oscar("")
         @osc.next_oscar = @osc.next_oscar.tomorrow
       end
@@ -220,12 +220,10 @@ class Irbie
 
   # Inner loop of the try method.
   def try_eval s
-
     reset_irb and return [] if s.strip == "exit"
     result = open("http://tryruby.hobix.com/irb?cmd=#{ CGI.escape(s)}",
                   {'Cookie' => "_session_id=#{@session}"}).read rescue "My ruby server is down"
     result[/^Your session has been closed/] ? (reset_irb and try_eval s) : result.split("\n").slice(0,20)
-
   end
 
   # Post a url to a del.icio.us account.
@@ -257,17 +255,25 @@ class Irbie
   end
 
   def speak_to_elbot(msg, name)
-    @elbots ||= Hash.new
-    @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
-    el = @elbots[name]
-    return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub(/<.*?>/, "")
+    begin
+      @elbots ||= Hash.new
+      @elbots[name] = @elbots[name] ||  Elbot.new(name.to_s)
+      el = @elbots[name]
+      return el.say( ( msg.gsub((config[:nick]), "Elbot") ) ).gsub(/elbot/i, config[:nick]).gsub(/<.*?>/, "")
+    rescue
+       return  "My personality server is malfunctioning, please try again later"
+    end
   end
 
   def python(msg, name)
-    @pysessions ||= Hash.new
-    @pysessions[name] = @pysessions[name] ||  Sacrilege.new
-    sacr = @pysessions[name]
-    return sacr.eval(msg)
+    begin
+      @pysessions ||= Hash.new
+      @pysessions[name] = @pysessions[name] ||  Sacrilege.new
+      sacr = @pysessions[name]
+      return sacr.eval(msg)
+    rescue
+      return "My python server is down"
+    end
   end
 
   def add_to_botlist(nick, flags)

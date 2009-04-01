@@ -6,7 +6,7 @@ class Elbot
 
   def initialize(name)
     @agent = WWW::Mechanize.new
-    @agent.user_agent_alias = 'Mac Safari'
+    @agent.user_agent_alias = 'Linux Mozilla'
     @page = @agent.get('http://www.elbot.com/cgi-bin/elbot.cgi')
 
     form = @page.forms[0]
